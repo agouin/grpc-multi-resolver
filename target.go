@@ -20,6 +20,7 @@
 package multiresolver
 
 import (
+	"net/url"
 	"strings"
 
 	"google.golang.org/grpc/resolver"
@@ -42,13 +43,13 @@ func split2(s, sep string) (string, string, bool) {
 // target}.
 func ParseTarget(target string) (ret resolver.Target) {
 	var ok bool
-	ret.Scheme, ret.Endpoint, ok = split2(target, "://")
+	ret.URL.Scheme, ret.URL.Path, ok = split2(target, "://")
 	if !ok {
-		return resolver.Target{Endpoint: target}
+		return resolver.Target{URL: url.URL{Path: target}}
 	}
-	ret.Authority, ret.Endpoint, ok = split2(ret.Endpoint, "/")
+	ret.URL.Host, ret.URL.Path, ok = split2(ret.Endpoint(), "/")
 	if !ok {
-		return resolver.Target{Endpoint: target}
+		return resolver.Target{URL: url.URL{Path: target}}
 	}
 	return ret
 }

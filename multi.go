@@ -13,6 +13,7 @@ package multiresolver
 
 import (
 	"fmt"
+	"net/url"
 	"strings"
 	"sync"
 
@@ -36,17 +37,19 @@ func (builder) Build(target resolver.Target, cc resolver.ClientConn, opts resolv
 		cc: cc,
 	}
 	var mr multiResolver
-	for _, t := range strings.Split(target.Endpoint, ",") {
+	for _, t := range strings.Split(target.Endpoint(), ",") {
 		parsedTarget := ParseTarget(t)
-		resolverBuilder := resolver.Get(parsedTarget.Scheme)
+		resolverBuilder := resolver.Get(parsedTarget.URL.Scheme)
 		if resolverBuilder == nil {
 			parsedTarget = resolver.Target{
-				Scheme:   resolver.GetDefaultScheme(),
-				Endpoint: t,
+				URL: url.URL{
+					Scheme: resolver.GetDefaultScheme(),
+					Path:   t,
+				},
 			}
-			resolverBuilder = resolver.Get(parsedTarget.Scheme)
+			resolverBuilder = resolver.Get(parsedTarget.URL.Scheme)
 			if resolverBuilder == nil {
-				return nil, fmt.Errorf("could not get resolver for default scheme: %q", parsedTarget.Scheme)
+				return nil, fmt.Errorf("could not get resolver for default scheme: %q", parsedTarget.URL.Scheme)
 			}
 		}
 		pcc := &partialClientConn{parent: pccg}
@@ -66,7 +69,7 @@ type partialClientConnGroup struct {
 	parts []*partialClientConn
 }
 
-func (pccg *partialClientConnGroup) updateState() {
+func (pccg *partialClientConnGroup) updateState() error {
 	s := resolver.State{}
 	pccg.parts[0].mtx.Lock()
 	s.ServiceConfig = pccg.parts[0].state.ServiceConfig
@@ -77,7 +80,7 @@ func (pccg *partialClientConnGroup) updateState() {
 		s.Addresses = append(s.Addresses, p.state.Addresses...)
 		p.mtx.Unlock()
 	}
-	pccg.cc.UpdateState(s)
+	return pccg.cc.UpdateState(s)
 }
 
 type partialClientConn struct {
@@ -92,8 +95,7 @@ func (cc *partialClientConn) UpdateState(s resolver.State) error {
 	cc.mtx.Lock()
 	cc.state = s
 	cc.mtx.Unlock()
-	cc.parent.updateState()
-	return nil
+	return cc.parent.updateState()
 }
 
 // ReportError notifies the ClientConn that the Resolver encountered an
@@ -108,11 +110,11 @@ func (cc *partialClientConn) ReportError(err error) {
 // The address list should be the complete list of resolved addresses.
 //
 // Deprecated: Use UpdateState instead.
-func (cc *partialClientConn) NewAddress(addresses []resolver.Address) {
+func (cc *partialClientConn) NewAddress(addresses []resolver.Address) error {
 	cc.mtx.Lock()
 	cc.state.Addresses = addresses
 	cc.mtx.Unlock()
-	cc.parent.updateState()
+	return cc.parent.updateState()
 }
 
 // NewServiceConfig is called by resolver to notify ClientConn a new
