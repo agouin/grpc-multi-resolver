@@ -110,11 +110,11 @@ func (cc *partialClientConn) ReportError(err error) {
 // The address list should be the complete list of resolved addresses.
 //
 // Deprecated: Use UpdateState instead.
-func (cc *partialClientConn) NewAddress(addresses []resolver.Address) error {
+func (cc *partialClientConn) NewAddress(addresses []resolver.Address) {
 	cc.mtx.Lock()
 	cc.state.Addresses = addresses
 	cc.mtx.Unlock()
-	return cc.parent.updateState()
+	_ = cc.parent.updateState()
 }
 
 // NewServiceConfig is called by resolver to notify ClientConn a new
@@ -125,7 +125,7 @@ func (cc *partialClientConn) NewServiceConfig(serviceConfig string) {
 	cc.mtx.Lock()
 	cc.state.ServiceConfig = cc.ParseServiceConfig(serviceConfig)
 	cc.mtx.Unlock()
-	cc.parent.updateState()
+	_ = cc.parent.updateState()
 }
 
 // ParseServiceConfig parses the provided service config and returns an
